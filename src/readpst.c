@@ -901,8 +901,6 @@ void write_embedded_message(FILE* f_output, pst_item_attach* attach, char *bound
 {
     pst_index_ll *ptr;
     DEBUG_ENT("write_embedded_message");
-    fprintf(f_output, "\n--%s\n", boundary);
-    fprintf(f_output, "Content-Type: %s\n\n", attach->mimetype.str);
     ptr = pst_getID(pf, attach->i_id);
 
     pst_desc_tree d_ptr;
@@ -918,8 +916,21 @@ void write_embedded_message(FILE* f_output, pst_item_attach* attach, char *bound
     d_ptr.child_tail  = NULL;
 
     pst_item *item = pst_parse_item(pf, &d_ptr, attach->id2_head);
-    write_normal_email(f_output, "", item, MODE_NORMAL, 0, pf, 0, extra_mime_headers);
-    pst_freeItem(item);
+    /* It appears that if the embedded message contains an appointment/
+       calendar item, pst_parse_item returns NULL due to the presence of
+       an unexpected reference type of 0x1048, which seems to represent
+       an array of GUIDs representing a CLSID. It's likely that this is
+       a reference to an internal Outlook COM class.
+
+       Log the skipped item and continue on. */
+    if (!item) {
+        DEBUG_WARN(("write_embedded_message: pst_parse_item was unable to parse the embedded message in attachment ID %llu", attach->i_id));
+    } else {
+        fprintf(f_output, "\n--%s\n", boundary);
+        fprintf(f_output, "Content-Type: %s\n\n", attach->mimetype.str);
+        write_normal_email(f_output, "", item, MODE_NORMAL, 0, pf, 0, extra_mime_headers);
+        pst_freeItem(item);
+    }
 
     DEBUG_RET();
 }
